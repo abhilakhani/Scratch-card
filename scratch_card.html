@@ -1,0 +1,109 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Scratch to Reveal!</title>
+  <style>
+    body {
+      background: #fcefe3;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    h1, h2, h3 {
+      text-align: center;
+      margin: 10px;
+    }
+
+    #container {
+      position: relative;
+      width: 300px;
+      height: 200px;
+    }
+
+    #revealImage {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 15px;
+      object-fit: cover;
+    }
+
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 15px;
+      touch-action: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP MESSAGE (EDIT BELOW) -->
+  <h1>Happy Birthday Mom & Dad!</h1>
+
+  <!-- NAME or SPECIAL LINE -->
+  <h2>From Ab</h2>
+
+  <div id="container">
+    <!-- MIDDLE MESSAGE IMAGE (EDIT URL BELOW) -->
+    <img id="revealImage" src="https://i.imgur.com/MG1fRey.png" alt="Surprise Image" />
+    <canvas id="scratchCanvas" width="300" height="200"></canvas>
+  </div>
+
+  <!-- BOTTOM MESSAGE (EDIT BELOW) -->
+  <h3>We can't wait for this new chapter! 💖</h3>
+
+  <script>
+    const canvas = document.getElementById("scratchCanvas");
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = "#c0c0c0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = "destination-out";
+
+    let isDrawing = false;
+
+    function getPosition(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+      return { x, y };
+    }
+
+    function scratch(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const { x, y } = getPosition(e);
+      ctx.beginPath();
+      ctx.arc(x, y, 20, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    canvas.addEventListener("mousedown", e => {
+      isDrawing = true;
+      scratch(e);
+    });
+
+    canvas.addEventListener("touchstart", e => {
+      isDrawing = true;
+      scratch(e);
+    });
+
+    canvas.addEventListener("mousemove", scratch);
+    canvas.addEventListener("touchmove", scratch);
+
+    ["mouseup", "mouseleave", "touchend"].forEach(event =>
+      canvas.addEventListener(event, () => (isDrawing = false))
+    );
+  </script>
+</body>
+</html>
