@@ -1,0 +1,286 @@
+import React, { useRef, useEffect, useState } from 'react';
+
+// The main application component for the digital scratch card.
+const App = () => {
+    // Refs to interact with the canvas and its context
+    const canvasRef = useRef(null);
+    const contextRef = useRef(null);
+
+    // State to manage the user's interaction and the card's status
+    const [isScratching, setIsScratching] = useState(false);
+    const [isRevealed, setIsRevealed] = useState(false);
+    const [scratchPercentage, setScratchPercentage] = useState(0);
+    const [prompt, setPrompt] = useState("");
+    const [generatedMessage, setGeneratedMessage] = useState("You're going to be grandparents!");
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Main secret message to be revealed
+    const revealTitle = "A Special Message Just For You!";
+    const revealMessage = generatedMessage;
+
+    // Constants for the canvas dimensions and scratch behavior
+    const CANVAS_WIDTH = 320;
+    const CANVAS_HEIGHT = 200;
+    const REVEAL_THRESHOLD = 70; // Percentage of the canvas to be scratched before revealing everything
+    const SCRATCH_RADIUS = 20;
+
+    // useEffect hook to initialize the canvas and draw the scratch layer
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Set up the canvas dimensions and context
+        canvas.width = CANVAS_WIDTH * 2; // For better resolution on high-DPI screens
+        canvas.height = CANVAS_HEIGHT * 2;
+        canvas.style.width = `${CANVAS_WIDTH}px`;
+        canvas.style.height = `${CANVAS_HEIGHT}px`;
+
+        const context = canvas.getContext('2d');
+        if (!context) return;
+        context.scale(2, 2);
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        contextRef.current = context;
+
+        // Draw the initial scratch-off layer
+        drawInitialScratchLayer(context, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // Reset the revealed state on component mount
+        setIsRevealed(false);
+        setScratchPercentage(0);
+    }, [generatedMessage]); // Re-draw the card when a new message is generated
+
+    // Function to draw the solid gray scratch layer with text
+    const drawInitialScratchLayer = (context, width, height) => {
+        // Create a pattern for a more realistic scratch card texture
+        const patternCanvas = document.createElement('canvas');
+        patternCanvas.width = 10;
+        patternCanvas.height = 10;
+        const patternContext = patternCanvas.getContext('2d');
+        patternContext.fillStyle = '#C0C0C0'; // Silver color for the scratch layer
+        patternContext.fillRect(0, 0, 10, 10);
+        patternContext.strokeStyle = '#a0a0a0';
+        patternContext.lineWidth = 1;
+        patternContext.beginPath();
+        patternContext.moveTo(0, 0);
+        patternContext.lineTo(10, 10);
+        patternContext.moveTo(10, 0);
+        patternContext.lineTo(0, 10);
+        patternContext.stroke();
+        const pattern = context.createPattern(patternCanvas, 'repeat');
+
+        context.fillStyle = pattern;
+        context.fillRect(0, 0, width, height);
+
+        // Add "Scratch to reveal!" text
+        context.fillStyle = '#000000';
+        context.font = '24px Inter, sans-serif';
+        context.textAlign = 'center';
+        context.fillText('Scratch to reveal!', width / 2, height / 2);
+    };
+
+    // Helper function to get the position of the mouse/touch event relative to the canvas
+    const getCoordinates = (e, canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches) {
+            e = e.touches[0];
+        }
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    };
+
+    // Function to check how much of the card has been scratched
+    const checkRevealedPercentage = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return 0;
+        
+        const context = contextRef.current;
+        if (!context) return 0;
+
+        const imageData = context.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        const data = imageData.data;
+        let transparentPixels = 0;
+        
+        // Loop through the pixel data, checking for transparency
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i + 3] === 0) { // Alpha value is 0 (transparent)
+                transparentPixels++;
+            }
+        }
+        
+        const totalPixels = CANVAS_WIDTH * CANVAS_HEIGHT;
+        const percentage = (transparentPixels / totalPixels) * 100;
+        setScratchPercentage(percentage);
+        
+        if (percentage >= REVEAL_THRESHOLD) {
+            revealAll();
+            return 100;
+        }
+        
+        return percentage;
+    };
+
+    // Function to clear the scratch layer completely
+    const revealAll = () => {
+        const context = contextRef.current;
+        if (context) {
+            context.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            setIsRevealed(true);
+            setScratchPercentage(100);
+        }
+    };
+    
+    // Event handler for starting the scratch action
+    const startScratching = (e) => {
+        e.preventDefault();
+        const { x, y } = getCoordinates(e, canvasRef.current);
+        if (contextRef.current && !isRevealed) {
+            contextRef.current.globalCompositeOperation = 'destination-out';
+            contextRef.current.beginPath();
+            contextRef.current.arc(x, y, SCRATCH_RADIUS, 0, 2 * Math.PI);
+            contextRef.current.fill();
+            setIsScratching(true);
+        }
+    };
+
+    // Event handler for moving the cursor/finger during scratching
+    const scratch = (e) => {
+        e.preventDefault();
+        if (!isScratching || isRevealed) return;
+        const { x, y } = getCoordinates(e, canvasRef.current);
+        if (contextRef.current) {
+            contextRef.current.lineTo(x, y);
+            contextRef.current.stroke();
+        }
+    };
+    
+    // Event handler for ending the scratch action
+    const endScratching = () => {
+        setIsScratching(false);
+        checkRevealedPercentage();
+    };
+
+    // Function to handle resetting the card
+    const handleReset = () => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+            const context = canvas.getContext('2d');
+            if (context) {
+                drawInitialScratchLayer(context, CANVAS_WIDTH, CANVAS_HEIGHT);
+                setIsRevealed(false);
+                setScratchPercentage(0);
+                setGeneratedMessage("You're going to be grandparents!"); // Reset to default
+            }
+        }
+    };
+
+    // Function to call the Gemini API and generate a new message
+    const generateMessage = async () => {
+        if (!prompt || isLoading) return;
+        setIsLoading(true);
+
+        const chatHistory = [{ role: "user", parts: [{ text: `Generate a single, short, and celebratory message for a digital scratch-off card based on the following prompt: "${prompt}". Keep it to one sentence and do not include emojis.` }] }];
+        const payload = { contents: chatHistory };
+        const apiKey = "";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                const text = result.candidates[0].content.parts[0].text;
+                setGeneratedMessage(text);
+            } else {
+                setGeneratedMessage("Something went wrong. Try a different prompt!");
+            }
+        } catch (error) {
+            console.error("Error generating message:", error);
+            setGeneratedMessage("Something went wrong. Please try again.");
+        } finally {
+            setIsLoading(false);
+            // After generating a new message, reset the card so the user can scratch it
+            handleReset();
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-inter p-4">
+            <div className="flex flex-col items-center p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full transition-all duration-300">
+                <h1 className="text-2xl font-bold mb-4 text-center">{revealTitle}</h1>
+                <div className="relative w-full rounded-xl overflow-hidden">
+                    {/* The canvas sits on top of the revealed message */}
+                    <canvas
+                        ref={canvasRef}
+                        className="touch-none cursor-pointer border-2 border-gray-300 dark:border-gray-600 rounded-xl w-full"
+                        onMouseDown={startScratching}
+                        onMouseMove={scratch}
+                        onMouseUp={endScratching}
+                        onMouseLeave={endScratching}
+                        onTouchStart={startScratching}
+                        onTouchMove={scratch}
+                        onTouchEnd={endScratching}
+                    ></canvas>
+                    {/* The message to be revealed underneath the canvas */}
+                    <div
+                        className="absolute inset-0 flex items-center justify-center p-4 text-center font-semibold text-2xl"
+                        style={{
+                            background: 'linear-gradient(135deg, #FFD1DC, #C6E2FF)', // Soft gradient
+                            opacity: isRevealed ? 1 : 0, // Show the message once revealed
+                            transition: 'opacity 0.5s ease-in-out'
+                        }}
+                    >
+                        {revealMessage}
+                    </div>
+                </div>
+                {/* A progress bar to show how much has been scratched */}
+                <div className="w-full h-2 bg-gray-300 dark:bg-gray-700 rounded-full mt-4">
+                    <div
+                        className="h-2 bg-pink-500 rounded-full transition-all duration-300"
+                        style={{ width: `${scratchPercentage}%` }}
+                    ></div>
+                </div>
+                {isRevealed && (
+                    <div className="mt-4 text-center text-green-600 font-bold">
+                        Congratulations! What a wonderful surprise!
+                    </div>
+                )}
+                {/* Reset and Generation UI */}
+                <div className="mt-6 w-full flex flex-col items-center">
+                    <input
+                        type="text"
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        placeholder="e.g., A message about a trip to Paris"
+                        className="w-full px-4 py-2 mb-2 border rounded-full text-gray-900 dark:text-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="w-full flex justify-center space-x-2">
+                        <button
+                            onClick={handleReset}
+                            className="flex-1 px-6 py-2 bg-gray-400 text-white font-bold rounded-full shadow-lg hover:bg-gray-500 transition-colors duration-200"
+                        >
+                            Reset Card
+                        </button>
+                        <button
+                            onClick={generateMessage}
+                            disabled={isLoading}
+                            className="flex-1 px-6 py-2 bg-blue-500 text-white font-bold rounded-full shadow-lg hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoading ? 'Generating...' : '✨ Generate Message'}
+                        </button>
+                    </div>
+                    {isLoading && <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Generating your message...</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default App;
